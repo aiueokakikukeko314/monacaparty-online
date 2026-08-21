@@ -1,0 +1,1580 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#070b18">
+  <title>Monaca Party Ultimate 50 Online</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <style>
+    :root { color-scheme: dark; }
+    * { -webkit-tap-highlight-color: transparent; }
+    body { min-height: 100dvh; background: #0f172a; overscroll-behavior: none; }
+    .glass { background: rgba(30, 41, 59, .96); }
+    .screen { animation: enter .24s ease-out; }
+    @keyframes enter { from { opacity: 0; transform: translateY(7px) scale(.99); } }
+    .tile-pop { animation: pop .22s ease-out; }
+    @keyframes pop { 50% { transform: scale(1.07); } }
+    .pulse-ring { animation: ring 1.6s infinite; }
+    @keyframes ring { 0%,100% { box-shadow: 0 0 0 0 rgba(99,102,241,.55); } 50% { box-shadow: 0 0 0 10px rgba(99,102,241,0); } }
+    #board { touch-action: none; }
+    #canvas-container { width: 100%; height: 250px; touch-action: none; }
+    button:disabled { opacity: .38; cursor: not-allowed; filter: grayscale(.35); }
+    .safe-bottom { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+  </style>
+</head>
+<body class="text-slate-100 antialiased">
+  <div id="app" class="mx-auto min-h-[100dvh] w-full max-w-md px-4 safe-bottom">
+    <header class="flex items-center justify-between border-b border-slate-700 bg-slate-800 px-1 py-3 shadow-md">
+      <div><h1 class="bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-xl font-black tracking-wider text-transparent">👑 MONACA PARTY</h1><p class="text-[9px] font-bold tracking-widest text-slate-500">ULTIMATE 50・ONLINE</p></div>
+      <div id="connection-pill" class="hidden items-center gap-2 rounded-full border border-slate-700 bg-slate-900/80 px-3 py-1.5 text-[10px] font-bold">
+        <span id="connection-dot" class="h-2 w-2 rounded-full bg-amber-400"></span>
+        <span id="connection-label">接続中</span>
+      </div>
+    </header>
+
+    <div id="fatal-error" class="hidden rounded-2xl border border-rose-500/50 bg-rose-950/80 p-4 text-sm text-rose-100"></div>
+
+    <main>
+      <section id="setup-screen" class="screen space-y-4">
+        <div class="glass overflow-hidden rounded-3xl border border-indigo-500/30 shadow-2xl shadow-indigo-950/50">
+          <div class="relative border-b border-slate-700 bg-slate-800 p-6 text-center">
+            <div class="relative"><h2 class="text-2xl font-black text-slate-100">すごろくをはじめよう！</h2><p class="mt-1 text-xs text-slate-400">2〜4台のスマホを部屋コードでつなぎます</p></div>
+          </div>
+          <div class="space-y-4 p-5">
+            <label class="block">
+              <span class="mb-1.5 block text-xs font-bold text-slate-300">あなたの名前</span>
+              <input id="nickname" maxlength="16" autocomplete="nickname" placeholder="例：カオリ" class="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-base font-bold outline-none focus:border-indigo-400">
+            </label>
+            <button id="create-room-btn" class="w-full rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 py-3.5 text-base font-black shadow-lg active:scale-[.98]">新しい部屋を作る</button>
+            <div class="flex items-center gap-3 text-[10px] font-bold text-slate-500"><div class="h-px flex-1 bg-slate-800"></div>または<div class="h-px flex-1 bg-slate-800"></div></div>
+            <div class="flex gap-2">
+              <input id="room-code-input" inputmode="numeric" maxlength="6" placeholder="6桁コード" class="min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-center text-lg font-black tracking-[.2em] outline-none focus:border-emerald-400">
+              <button id="join-room-btn" class="rounded-xl bg-emerald-600 px-5 font-black active:scale-[.98]">参加</button>
+            </div>
+          </div>
+        </div>
+        <p class="px-3 text-center text-[11px] leading-relaxed text-slate-500">ログイン不要。参加者には6桁の部屋コードだけを伝えてください。</p>
+      </section>
+
+      <section id="config-screen" class="screen hidden">
+        <div class="glass rounded-3xl border border-amber-500/40 p-6 shadow-2xl">
+          <div class="mb-4 text-4xl">🔥</div>
+          <h2 class="text-xl font-black text-amber-300">Firebaseの設定が必要です</h2>
+          <p class="mt-2 text-sm leading-relaxed text-slate-300">同梱の <code class="rounded bg-slate-950 px-1.5 py-0.5 text-indigo-300">firebase-config.js</code> に、Firebaseコンソールで表示される設定値を貼り付けてください。</p>
+          <ol class="mt-5 list-decimal space-y-2 pl-5 text-sm text-slate-300">
+            <li>匿名認証を有効化</li><li>Realtime Databaseを作成</li><li>同梱ルールを公開</li>
+          </ol>
+          <p class="mt-5 text-xs text-slate-500">詳しい手順はREADME.mdにあります。</p>
+        </div>
+      </section>
+
+      <section id="lobby-screen" class="screen hidden space-y-4">
+        <div class="glass rounded-3xl border border-slate-700 p-5 shadow-xl">
+          <p class="text-center text-xs font-bold text-slate-400">部屋コード</p>
+          <button id="copy-code-btn" class="mx-auto mt-1 block text-4xl font-black tracking-[.18em] text-amber-300 active:scale-95"><span id="room-code-label">------</span></button>
+          <p class="mt-2 text-center text-[10px] text-slate-500">タップしてコピー</p>
+        </div>
+        <div class="glass rounded-3xl border border-slate-700 p-5">
+          <div class="mb-4 flex items-center justify-between"><h2 class="font-black">参加プレイヤー</h2><span id="member-count" class="rounded-full bg-indigo-500/20 px-2 py-1 text-xs font-bold text-indigo-300">0 / 4</span></div>
+          <div id="members-list" class="space-y-2"></div>
+        </div>
+        <div id="host-settings" class="glass hidden space-y-3 rounded-3xl border border-slate-700 p-5">
+          <h3 class="text-sm font-black text-amber-300">ゲームルール</h3>
+          <label class="flex items-center justify-between rounded-xl bg-slate-950 p-3 text-sm font-bold"><span>ピッタリでゴール</span><input id="rule-exact" type="checkbox" checked class="h-5 w-5 accent-indigo-500"></label>
+          <label class="flex items-center justify-between rounded-xl bg-slate-950 p-3 text-sm font-bold"><span>ラストスパート（効果2倍）</span><input id="rule-spurt" type="checkbox" class="h-5 w-5 accent-rose-500"></label>
+          <button id="start-game-btn" disabled class="w-full rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 py-3.5 font-black">2人以上でゲーム開始</button>
+        </div>
+        <p id="guest-waiting" class="rounded-2xl border border-slate-700 bg-slate-900/70 p-4 text-center text-sm font-bold text-slate-400">ホストがゲームを開始するのを待っています…</p>
+      </section>
+
+      <section id="board-screen" class="screen hidden space-y-3">
+        <div class="glass flex items-center justify-between rounded-2xl border border-slate-700 p-3">
+          <div class="flex items-center gap-3"><span id="turn-color" class="h-4 w-4 rounded-full"></span><div><p class="text-[9px] font-bold uppercase tracking-wider text-slate-500">現在の手番</p><p id="turn-name" class="text-sm font-black"></p></div></div>
+          <div class="text-right"><p id="round-label" class="text-[9px] font-bold text-slate-500">ROUND 1</p><p id="turn-badge" class="text-xs font-black text-indigo-300"></p></div>
+        </div>
+        <div class="relative overflow-hidden rounded-2xl border-2 border-slate-800 bg-slate-950 p-1 shadow-2xl">
+          <div id="canvas-container"></div>
+          <canvas id="board" width="720" height="480" class="hidden w-full"></canvas>
+          <div id="last-spurt" class="absolute left-1/2 top-3 hidden -translate-x-1/2 rounded-full border border-white/60 bg-rose-600 px-3 py-1 text-[10px] font-black shadow-lg">🔥 ラストスパート・効果2倍</div>
+        </div>
+        <div id="event-log" class="min-h-[62px] rounded-2xl border border-indigo-500/20 bg-indigo-950/40 p-3 text-center text-xs font-bold leading-relaxed text-indigo-100"></div>
+        <div id="scoreboard" class="glass space-y-1.5 rounded-2xl border border-slate-700 p-3"></div>
+        <div class="grid grid-cols-5 gap-2">
+          <button id="item-btn" class="col-span-2 rounded-2xl border border-slate-600 bg-slate-800 py-3 text-sm font-black">🎒 アイテム</button>
+          <button id="dice-btn" class="col-span-3 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-700 py-3 text-lg font-black shadow-lg active:scale-[.98]"><span id="dice-label">🎲 サイコロ</span></button>
+        </div>
+      </section>
+
+      <section id="minigame-screen" class="screen hidden space-y-4">
+        <div class="glass rounded-3xl border border-fuchsia-500/30 p-5 text-center shadow-2xl shadow-fuchsia-950/30">
+          <div class="text-4xl">🎮</div><p class="mt-2 text-xs font-black tracking-[.25em] text-fuchsia-300">MINI GAME</p>
+          <h2 id="minigame-title" class="mt-1 text-2xl font-black"></h2><p id="minigame-desc" class="mt-2 text-sm leading-relaxed text-slate-300"></p>
+        </div>
+        <div id="minigame-play-area" class="glass min-h-[280px] rounded-3xl border border-slate-700 p-5"></div>
+        <button id="start-minigame-btn" class="hidden w-full rounded-2xl bg-gradient-to-r from-fuchsia-500 to-purple-600 py-4 text-lg font-black">ミニゲーム開始</button>
+        <p id="minigame-waiting" class="hidden text-center text-sm font-bold text-slate-400">ホストの開始を待っています…</p>
+      </section>
+
+      <section id="results-screen" class="screen hidden space-y-4">
+        <div class="glass rounded-3xl border border-amber-500/30 p-6 text-center shadow-2xl"><div class="text-5xl">🏆</div><h2 class="mt-2 text-2xl font-black text-amber-300">結果発表</h2><div id="results-list" class="mt-5 space-y-2 text-left"></div></div>
+        <button id="continue-btn" class="hidden w-full rounded-2xl bg-indigo-600 py-4 text-lg font-black">次のラウンドへ</button>
+        <p id="results-waiting" class="hidden text-center text-sm font-bold text-slate-400">ホストが次へ進むのを待っています…</p>
+      </section>
+
+      <section id="final-screen" class="screen hidden space-y-4">
+        <div class="glass rounded-3xl border border-amber-400/40 p-6 text-center shadow-2xl"><div class="text-5xl">✨</div><h2 class="mt-2 text-3xl font-black text-amber-300">FINAL RESULT</h2><p id="winner-message" class="mt-2 text-sm text-slate-300"></p><div id="final-list" class="mt-5 space-y-2 text-left"></div></div>
+        <button id="leave-btn" class="w-full rounded-2xl bg-slate-700 py-4 font-black">タイトルへ戻る</button>
+      </section>
+    </main>
+  </div>
+
+  <div id="item-modal" class="fixed inset-0 z-50 hidden items-end bg-black/75 p-4 sm:items-center sm:justify-center">
+    <div class="mx-auto w-full max-w-md rounded-3xl border border-slate-600 bg-slate-900 p-5 shadow-2xl"><div class="flex items-center justify-between"><h3 class="text-lg font-black">🎒 アイテム</h3><button id="close-item-btn" class="rounded-full bg-slate-800 px-3 py-1.5 text-sm font-bold">閉じる</button></div><div id="item-list" class="mt-4 space-y-2"></div></div>
+  </div>
+
+  <div id="toast" class="pointer-events-none fixed left-1/2 top-4 z-[60] hidden max-w-[90vw] -translate-x-1/2 rounded-full border border-slate-600 bg-slate-900 px-4 py-2 text-center text-xs font-bold shadow-2xl"></div>
+  <script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js";
+import { getAuth, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js";
+import {
+  getDatabase, get, onDisconnect, onValue, ref, runTransaction, serverTimestamp, set, update
+} from "https://www.gstatic.com/firebasejs/12.17.1/firebase-database.js";
+
+// Firebase Webアプリ: monacaparty
+const firebaseConfig = {
+  apiKey: "AIzaSyBOi290gCtDSRBFF1V46tLpkCOpSCf7Cjw",
+  authDomain: "monacaparty.firebaseapp.com",
+  databaseURL: "https://monacaparty-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "monacaparty",
+  storageBucket: "monacaparty.firebasestorage.app",
+  messagingSenderId: "947981493599",
+  appId: "1:947981493599:web:8770178d4e278d695cc2ea"
+};
+
+
+const COLORS = ["#ef4444", "#3b82f6", "#10b981", "#f59e0b"];
+
+const ITEMS = {
+  doubleDice: { id: "doubleDice", name: "🎲 ダブルダイス", desc: "次の出目が2つのサイコロの合計になるぞ！" },
+  magnet: { id: "magnet", name: "🧲 ヨコドリ磁石", desc: "選んだ相手から5コイン奪う！" },
+  shield: { id: "shield", name: "🛡️ 無敵シールド", desc: "マイナス効果を1回だけ防ぐ！" }
+};
+
+const MAP = [
+  ["start", "スタート"], ["blue", "プラスマス"], ["blue", "プラスマス"], ["red", "マイナスマス"],
+  ["warp", "ワープマス"], ["item", "アイテムマス"], ["blue", "プラスマス"], ["swap", "シャッフル"],
+  ["blue", "プラスマス"], ["red", "マイナスマス"], ["star", "スターマス"], ["item", "アイテムマス"],
+  ["bowser", "ドクロマス"], ["hotspring", "温泉マス"], ["warp", "ワープマス"], ["blue", "プラスマス"],
+  ["battle", "ミニゲームバトル"], ["blue", "プラスマス"], ["swap", "シャッフル"], ["blue", "プラスマス"],
+  ["item", "アイテムマス"], ["blue", "プラスマス"], ["bowser", "ドクロマス"], ["blue", "プラスマス"],
+  ["red", "マイナスマス"], ["warp", "ワープマス"], ["blue", "プラスマス"], ["battle", "ミニゲームバトル"],
+  ["item", "アイテムマス"], ["hotspring", "温泉マス"], ["star", "スターマス"], ["red", "マイナスマス"],
+  ["bowser", "ドクロマス"], ["star", "スターマス"], ["bowser", "ドクロマス"], ["goal", "ゴール！"]
+].map(([type, label], index) => ({ index, type, label }));
+
+const MINI_GAMES = [
+  { id: "clicker", title: "爆速！連打バトル", desc: "10秒間で自分のカラーエリアをどれだけ連打できるかを競います！", duration: 10000 },
+  { id: "timing", title: "ジャスト50％を狙え！", desc: "100%まで往復するゲージを、ぴったり50%で止めましょう。", duration: 12000 },
+  { id: "catcher", title: "コインキャッチャー", desc: "落ちてくるコインとスターをキャッチ！爆弾には注意！", duration: 12000 },
+  { id: "shield", title: "早押しシールド", desc: "中央が「！」に変わった瞬間に、誰よりも早くボタンを押せ！", duration: 8500 },
+  { id: "bombpass", title: "爆弾キャッチ＆リリース", desc: "爆弾を持っている人はボタンを押して次の人へなすりつけろ！", duration: 10000 },
+  { id: "numbers", title: "スピード数字パズル", desc: "順番に挑戦！1→2→3→4を一番早く押せ！", duration: 75000, sequential: true },
+  { id: "tug", title: "2vs2！引っ張りロープ", desc: "チームで協力して自分の連打ボタンを全力で叩け！", duration: 10000 },
+  { id: "pairs", title: "記憶とスリル！めくりバースト", desc: "順番にカードをめくってペアを探そう。爆弾ペアは得点半分！", duration: 120000, sequential: true },
+  { id: "stopwatch", title: "体内時計！ギリギリ5.00秒", desc: "3秒で表示が消えます。5.00秒ぴったりを狙おう。", duration: 10000 },
+  { id: "balloon", title: "チキン風船パンプ", desc: "順番に1〜3回空気を入れ、風船を割った人が負け！", duration: 120000, sequential: true },
+  { id: "memory", title: "お宝メモリー", desc: "王冠の場所を覚え、順番に正解のカードを選ぼう。", duration: 65000, sequential: true },
+  { id: "animal", title: "アニマル・カウント", desc: "横切る動物を数え、順番に答えを入力しよう。", duration: 75000, sequential: true }
+];
+
+const clone = value => JSON.parse(JSON.stringify(value));
+const randomId = () => Math.random().toString(36).slice(2, 10);
+const clampCoins = n => Math.max(0, Math.round(n));
+const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
+
+function hashSeed(value) {
+  let hash = 2166136261;
+  for (const char of String(value)) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
+  return hash >>> 0;
+}
+
+function seededRandom(seed) {
+  let value = hashSeed(seed) || 1;
+  return () => {
+    value += 0x6D2B79F5;
+    let t = value;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function shuffled(values, random = Math.random) {
+  const result = [...values];
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+
+function createInitialState(members, rules = {}) {
+  const ordered = [...members].sort((a, b) => a.joinedAt - b.joinedAt).slice(0, 4);
+  return {
+    version: 2,
+    phase: "board",
+    round: 1,
+    currentSeat: 0,
+    roundId: randomId(),
+    rules: { exactGoal: rules.exactGoal !== false, lastSpurt: Boolean(rules.lastSpurt) },
+    lastSpurt: false,
+    activeItem: null,
+    immediateBattle: false,
+    battlePot: 0,
+    miniGameQueue: shuffled(MINI_GAMES.map(game => game.id)),
+    lastEvent: "ゲーム開始！最初のプレイヤーの番です。",
+    lastRoll: null,
+    processed: {},
+    players: ordered.map((member, seat) => ({
+      uid: member.uid, seat, name: member.name, color: COLORS[seat], position: 0, coins: 10,
+      score: 0, reward: 0, items: [], hasShield: false, skipTurns: 0, hasGoalBonus: false,
+      stats: { minigameCoins: 0, badTiles: 0, hotsprings: 0 }
+    }))
+  };
+}
+
+function randomOther(players, player) {
+  const others = players.filter(candidate => candidate.uid !== player.uid);
+  return others.length ? others[Math.floor(Math.random() * others.length)] : null;
+}
+
+function applyNegative(player, amount, message) {
+  if (player.hasShield) {
+    player.hasShield = false;
+    return `🛡️ ${player.name}はシールドで「${message}」を防いだ！`;
+  }
+  player.coins = clampCoins(player.coins - amount);
+  player.stats.badTiles += 1;
+  return `${message} ${amount}コイン失った。`;
+}
+
+function land(state, player) {
+  const tile = MAP[player.position];
+  const twice = state.lastSpurt ? 2 : 1;
+  let event = `${player.name}が${tile.index}番「${tile.label}」に止まった。`;
+  if (tile.type === "blue") {
+    player.coins += 3 * twice;
+    event += ` 🔵 ${3 * twice}コイン獲得！`;
+  } else if (tile.type === "red") {
+    event += ` 🔴 ${applyNegative(player, 2 * twice, "マイナスマス！")}`;
+  } else if (tile.type === "star") {
+    player.coins += 8 * twice;
+    event += ` ⭐ ${8 * twice}コイン獲得！`;
+  } else if (tile.type === "bowser") {
+    event += ` 💀 ${applyNegative(player, 5 * twice, "ドクロマス！")}`;
+  } else if (tile.type === "item") {
+    const pool = Object.values(ITEMS);
+    const item = clone(pool[Math.floor(Math.random() * pool.length)]);
+    player.items.push(item);
+    event += ` 🎁 ${item.name}を獲得！`;
+  } else if (tile.type === "hotspring") {
+    player.skipTurns = 1;
+    player.stats.hotsprings += 1;
+    event += " ♨️ 次の手番は1回休み。その時にコインを獲得。";
+  } else if (tile.type === "warp") {
+    const delta = Math.random() > 0.45 ? 4 : -3;
+    player.position = clamp(player.position + delta, 0, MAP.length - 2);
+    event += ` 🌀 ${delta > 0 ? "4マス進んだ" : "3マス戻った"}！`;
+  } else if (tile.type === "swap") {
+    const target = randomOther(state.players, player);
+    if (target) {
+      [player.coins, target.coins] = [target.coins, player.coins];
+      event += ` 🔄 ${target.name}とコインを交換！`;
+    }
+  } else if (tile.type === "battle") {
+    const bet = (5 + Math.floor(Math.random() * 11)) * twice;
+    state.battlePot = 0;
+    state.players.forEach(participant => {
+      if (participant.hasShield) participant.hasShield = false;
+      else {
+        const paid = Math.min(participant.coins, bet);
+        participant.coins -= paid;
+        state.battlePot += paid;
+      }
+    });
+    state.immediateBattle = true;
+    event += ` ⚔️ 全員から最大${bet}コイン、賞金総額${state.battlePot}コイン！`;
+  }
+  return event;
+}
+
+function nextMiniGame(state) {
+  if (!Array.isArray(state.miniGameQueue) || !state.miniGameQueue.length) {
+    state.miniGameQueue = shuffled(MINI_GAMES.map(game => game.id));
+  }
+  const id = state.miniGameQueue.shift();
+  return clone(MINI_GAMES.find(game => game.id === id) || MINI_GAMES[0]);
+}
+
+function beginMiniGame(state, now) {
+  const game = nextMiniGame(state);
+  state.resumeSeat = state.immediateBattle ? state.currentSeat + 1 : 0;
+  state.advanceRoundAfterMiniGame = !state.immediateBattle;
+  state.phase = "minigame_intro";
+  state.roundId = randomId();
+  state.miniGame = { ...game, startedAt: null, endsAt: null, readyToSettle: false };
+  state.players.forEach(player => { player.score = 0; player.reward = 0; });
+  state.lastEvent = `🎮 ミニゲーム「${game.title}」が始まります！`;
+  state.updatedAt = now;
+}
+
+function moveToNextPlayer(state, now) {
+  state.currentSeat += 1;
+  if (state.currentSeat >= state.players.length) {
+    state.currentSeat = 0;
+    beginMiniGame(state, now);
+    return;
+  }
+  const next = state.players[state.currentSeat];
+  if (next.skipTurns > 0) {
+    next.skipTurns -= 1;
+    const gain = state.lastSpurt ? 6 : 3;
+    next.coins += gain;
+    state.lastEvent = `♨️ ${next.name}は1回休み。温泉で${gain}コイン獲得！`;
+    moveToNextPlayer(state, now);
+  }
+}
+
+function applyRoll(current, uid, actionId, now = Date.now(), forcedRolls = null) {
+  const state = clone(current);
+  if (!state || state.phase !== "board") return current;
+  const player = state.players[state.currentSeat];
+  if (!player || player.uid !== uid || state.processed?.[uid] === actionId) return current;
+  const rolls = forcedRolls || (state.activeItem === "doubleDice"
+    ? [1 + Math.floor(Math.random() * 6), 1 + Math.floor(Math.random() * 6)]
+    : [1 + Math.floor(Math.random() * 6)]);
+  state.processed = { ...(state.processed || {}), [uid]: actionId };
+  state.activeItem = null;
+  const total = rolls.reduce((sum, value) => sum + value, 0);
+  const goal = MAP.length - 1;
+  const from = player.position;
+  let to = from + total;
+  if (to > goal) to = state.rules.exactGoal ? from : goal;
+  player.position = to;
+  state.lastRoll = { uid, rolls, total, from, to, at: now };
+  if (!state.lastSpurt && state.rules.lastSpurt && to >= 28) state.lastSpurt = true;
+  if (to === goal) {
+    player.hasGoalBonus = true;
+    player.coins += 15;
+    state.phase = "finished";
+    state.lastEvent = `🏁 ${player.name}がゴール！ゴール賞15コインを獲得！`;
+    state.updatedAt = now;
+    return state;
+  }
+  state.lastEvent = `🎲 ${player.name}は${rolls.join(" + ")}、合計${total}！ ` + land(state, player);
+  if (state.immediateBattle) beginMiniGame(state, now);
+  else moveToNextPlayer(state, now);
+  state.updatedAt = now;
+  return state;
+}
+
+function useItem(current, uid, actionId, itemIndex, targetUid, now = Date.now()) {
+  const state = clone(current);
+  if (!state || state.phase !== "board" || state.players[state.currentSeat]?.uid !== uid) return current;
+  if (state.processed?.[uid] === actionId) return current;
+  const player = state.players[state.currentSeat];
+  const item = player.items?.[itemIndex];
+  if (!item) return current;
+  if (item.id === "magnet") {
+    const target = state.players.find(candidate => candidate.uid === targetUid && candidate.uid !== uid);
+    if (!target) return current;
+    const amount = Math.min(5, target.coins);
+    target.coins -= amount;
+    player.coins += amount;
+    state.lastEvent = `🧲 ${player.name}が${target.name}から${amount}コイン奪った！`;
+  } else if (item.id === "shield") {
+    player.hasShield = true;
+    state.lastEvent = `🛡️ ${player.name}が無敵シールドを使った！`;
+  } else if (item.id === "doubleDice") {
+    state.activeItem = "doubleDice";
+    state.lastEvent = `🎲 ${player.name}がダブルダイスを使った！`;
+  }
+  player.items.splice(itemIndex, 1);
+  state.processed = { ...(state.processed || {}), [uid]: actionId };
+  state.updatedAt = now;
+  return state;
+}
+
+function setupMiniGameState(state, now) {
+  const game = state.miniGame;
+  const seed = `${state.roundId}-${now}-${game.id}`;
+  const random = seededRandom(seed);
+  game.seed = seed;
+  game.startedAt = now + 1200;
+  game.endsAt = game.startedAt + game.duration;
+  game.readyToSettle = false;
+  game.turnSeat = 0;
+  if (game.id === "shield") game.signalAt = game.startedAt + 1800 + Math.floor(random() * 3200);
+  if (game.id === "bombpass") game.bombSeat = Math.floor(random() * state.players.length);
+  if (game.id === "balloon") {
+    game.balloonLimit = 15 + Math.floor(random() * 15);
+    game.balloonCurrent = 0;
+    game.turnSeat = Math.floor(random() * state.players.length);
+  }
+  if (game.id === "memory") {
+    game.memoryTarget = Math.floor(random() * 4);
+    game.revealUntil = game.startedAt + 2500;
+    game.answers = {};
+  }
+  if (game.id === "pairs") {
+    const values = shuffled(["💎", "💎", "🔑", "🔑", "🎈", "🎈", "⭐", "⭐", "💣", "💣", "💣", "💣"], random);
+    game.cards = values.map(emoji => ({ emoji, matched: false }));
+    game.selected = [];
+    game.points = state.players.map(() => 0);
+  }
+  if (game.id === "animal") {
+    const emojis = ["🐶", "🐱", "🐭", "🐰"];
+    game.targetEmoji = emojis[Math.floor(random() * emojis.length)];
+    game.sequence = Array.from({ length: 15 + Math.floor(random() * 10) }, () => emojis[Math.floor(random() * emojis.length)]);
+    game.correctCount = game.sequence.filter(emoji => emoji === game.targetEmoji).length;
+    game.answerAt = game.startedAt + 3000 + game.sequence.length * 250 + 1400;
+    game.answers = {};
+  }
+}
+
+function startMiniGameRound(current, uid, hostUid, now = Date.now()) {
+  const state = clone(current);
+  if (!state || state.phase !== "minigame_intro" || uid !== hostUid) return current;
+  state.phase = "minigame_play";
+  setupMiniGameState(state, now);
+  state.lastEvent = `🎮 ${state.miniGame.title} スタート！`;
+  state.updatedAt = now;
+  return state;
+}
+
+function markProcessed(state, uid, actionId) {
+  state.processed = { ...(state.processed || {}), [uid]: actionId };
+}
+
+function activeMiniPlayer(state) {
+  return state.players[state.miniGame.turnSeat];
+}
+
+function finishSequentialTurn(state, now) {
+  state.miniGame.turnSeat += 1;
+  if (state.miniGame.turnSeat >= state.players.length) {
+    state.miniGame.readyToSettle = true;
+    state.miniGame.endsAt = now + 700;
+  }
+}
+
+function applyMiniGameAction(current, uid, input, now = Date.now()) {
+  const state = clone(current);
+  if (!state || state.phase !== "minigame_play" || !input || input.roundId !== state.roundId) return current;
+  if (state.processed?.[uid] === input.actionId) return current;
+  const game = state.miniGame;
+  const player = state.players.find(candidate => candidate.uid === uid);
+  if (!player || now < game.startedAt || game.readyToSettle) return current;
+
+  if (game.id === "bombpass" && input.action === "bomb_tap") {
+    if (state.players[game.bombSeat]?.uid !== uid) return current;
+    game.bombSeat = (game.bombSeat + 1) % state.players.length;
+    game.passCount = (game.passCount || 0) + 1;
+    state.lastEvent = `💣 ${player.name}が爆弾をパス！`;
+  } else if (game.id === "numbers" && input.action === "numbers_finish") {
+    if (activeMiniPlayer(state)?.uid !== uid) return current;
+    const elapsed = clamp(Number(input.elapsed) || game.duration, 1, 60000);
+    player.score = scoreNumbers(elapsed);
+    game.lastResult = `${player.name}：${(elapsed / 1000).toFixed(2)}秒`;
+    finishSequentialTurn(state, now);
+  } else if (game.id === "pairs" && input.action === "pairs_flip") {
+    if (activeMiniPlayer(state)?.uid !== uid) return current;
+    const index = Number(input.cardIndex);
+    const card = game.cards?.[index];
+    if (!card || card.matched || game.selected.includes(index)) return current;
+    game.selected.push(index);
+    if (game.selected.length === 2) {
+      const [firstIndex, secondIndex] = game.selected;
+      const first = game.cards[firstIndex];
+      const second = game.cards[secondIndex];
+      game.lastReveal = { cards: [firstIndex, secondIndex], until: now + 1100 };
+      if (first.emoji === second.emoji) {
+        first.matched = true;
+        second.matched = true;
+        if (first.emoji === "💣") {
+          game.points[game.turnSeat] = Math.max(0, Math.floor(game.points[game.turnSeat] / 2));
+          game.lastResult = `${player.name}は爆弾ペア！得点が半分！`;
+          game.turnSeat = (game.turnSeat + 1) % state.players.length;
+        } else {
+          game.points[game.turnSeat] += 1;
+          game.lastResult = `${player.name}が${first.emoji}のペアを発見！もう一度！`;
+        }
+      } else {
+        game.lastResult = `${player.name}はペアを揃えられず、次の人へ。`;
+        game.turnSeat = (game.turnSeat + 1) % state.players.length;
+      }
+      game.selected = [];
+      const remainingUseful = game.cards.some(cardItem => !cardItem.matched && cardItem.emoji !== "💣");
+      if (!remainingUseful) {
+        state.players.forEach((participant, seat) => { participant.score = (game.points[seat] || 0) * 10; });
+        game.readyToSettle = true;
+        game.endsAt = now + 1200;
+      }
+    }
+  } else if (game.id === "balloon" && input.action === "balloon_pump") {
+    if (activeMiniPlayer(state)?.uid !== uid) return current;
+    const amount = clamp(Math.round(Number(input.amount) || 1), 1, 3);
+    game.balloonCurrent += amount;
+    if (game.balloonCurrent >= game.balloonLimit) {
+      game.loserSeat = game.turnSeat;
+      state.players.forEach((participant, seat) => { participant.score = seat === game.loserSeat ? -1 : 10; });
+      game.lastResult = `💥 ${player.name}が風船を割ってしまった！`;
+      game.readyToSettle = true;
+      game.endsAt = now + 1200;
+    } else {
+      game.lastResult = `${player.name}が${amount}回空気を入れた！`;
+      game.turnSeat = (game.turnSeat + 1) % state.players.length;
+    }
+  } else if (game.id === "memory" && input.action === "memory_choice") {
+    if (activeMiniPlayer(state)?.uid !== uid || now < game.revealUntil) return current;
+    const choice = clamp(Math.round(Number(input.choice) || 0), 0, 3);
+    const correct = choice === game.memoryTarget;
+    player.score = correct ? 10 : 0;
+    game.answers[uid] = { choice, correct };
+    game.lastResult = `${player.name}は${["A", "B", "C", "D"][choice]}を選択！`;
+    finishSequentialTurn(state, now);
+  } else if (game.id === "animal" && input.action === "animal_answer") {
+    if (activeMiniPlayer(state)?.uid !== uid || now < game.answerAt) return current;
+    const answer = clamp(Math.round(Number(input.answer) || 0), 0, 99);
+    const difference = Math.abs(game.correctCount - answer);
+    player.score = Math.max(0, 10 - difference);
+    game.answers[uid] = answer;
+    game.lastResult = `${player.name}の答え：${answer}匹`;
+    finishSequentialTurn(state, now);
+  } else {
+    return current;
+  }
+
+  markProcessed(state, uid, input.actionId);
+  state.updatedAt = now;
+  return state;
+}
+
+function validInput(inputs, player, state) {
+  const input = inputs?.[player.uid];
+  return input?.roundId === state.roundId ? input : null;
+}
+
+function scoreSimultaneousGame(state, inputs) {
+  const game = state.miniGame;
+  if (["clicker", "timing", "catcher", "stopwatch"].includes(game.id)) {
+    state.players.forEach(player => {
+      const input = validInput(inputs, player, state);
+      if (game.id === "clicker") player.score = Math.max(0, Number(input?.taps) || 0);
+      else player.score = Math.max(0, Number(input?.score) || 0);
+    });
+  } else if (game.id === "shield") {
+    const valid = [];
+    state.players.forEach(player => {
+      const input = validInput(inputs, player, state);
+      const pressedAt = Number(input?.pressedAt);
+      if (!pressedAt) player.score = 0;
+      else if (pressedAt < game.signalAt) player.score = -5;
+      else valid.push({ player, reaction: pressedAt - game.signalAt });
+    });
+    valid.sort((a, b) => a.reaction - b.reaction);
+    valid.forEach((entry, index) => { entry.player.score = index === 0 ? Math.max(1, 1000 - entry.reaction) : 0; });
+    game.winnerUid = valid[0]?.player.uid || null;
+    game.reaction = valid[0]?.reaction ?? null;
+  } else if (game.id === "tug") {
+    const split = Math.ceil(state.players.length / 2);
+    const totals = [0, 0];
+    state.players.forEach(player => {
+      const input = validInput(inputs, player, state);
+      totals[player.seat < split ? 0 : 1] += Math.max(0, Number(input?.taps) || 0);
+    });
+    const winningTeam = totals[0] === totals[1] ? -1 : totals[0] > totals[1] ? 0 : 1;
+    state.players.forEach(player => {
+      const team = player.seat < split ? 0 : 1;
+      player.score = winningTeam === -1 ? 5 : team === winningTeam ? 10 : 2;
+    });
+    game.teamTotals = totals;
+  } else if (game.id === "bombpass") {
+    const loserSeat = game.bombSeat || 0;
+    state.players.forEach((player, seat) => { player.score = seat === loserSeat ? -1 : 10; });
+    game.loserSeat = loserSeat;
+  } else if (game.id === "balloon" && game.loserSeat == null) {
+    game.loserSeat = game.turnSeat || 0;
+    state.players.forEach((player, seat) => { player.score = seat === game.loserSeat ? -1 : 10; });
+  } else if (game.id === "pairs") {
+    state.players.forEach((player, seat) => { player.score = (game.points?.[seat] || 0) * 10; });
+  }
+}
+
+function rankPlayers(players) {
+  const sorted = [...players].sort((a, b) => b.score - a.score || a.seat - b.seat);
+  let previousScore = null;
+  let previousRank = 0;
+  return sorted.map((player, index) => {
+    const rank = previousScore === player.score ? previousRank : index + 1;
+    previousScore = player.score;
+    previousRank = rank;
+    return { player, rank };
+  });
+}
+
+function settleMiniGame(current, inputs, now = Date.now()) {
+  const state = clone(current);
+  if (!state || state.phase !== "minigame_play") return current;
+  if (!state.miniGame.readyToSettle && now < state.miniGame.endsAt) return current;
+  scoreSimultaneousGame(state, inputs);
+  const ranked = rankPlayers(state.players);
+  const normalRewards = [10, 5, 2, 0];
+
+  if (state.immediateBattle) {
+    const ratios = state.players.length === 4 ? [0.5, 0.3, 0.15, 0.05] : state.players.length === 3 ? [0.6, 0.3, 0.1] : [0.7, 0.3];
+    const rewards = ratios.map(ratio => Math.floor(state.battlePot * ratio));
+    rewards[0] += state.battlePot - rewards.reduce((sum, value) => sum + value, 0);
+    ranked.forEach(({ player }, index) => {
+      const target = state.players.find(candidate => candidate.uid === player.uid);
+      target.reward = rewards[index] || 0;
+      target.coins += target.reward;
+      target.stats.minigameCoins += target.reward;
+    });
+  } else {
+    ranked.forEach(({ player, rank }) => {
+      const target = state.players.find(candidate => candidate.uid === player.uid);
+      target.reward = normalRewards[Math.min(rank - 1, normalRewards.length - 1)];
+      target.coins += target.reward;
+      target.stats.minigameCoins += target.reward;
+    });
+  }
+
+  state.results = ranked.map(({ player, rank }) => ({
+    uid: player.uid, rank, name: player.name, color: player.color, score: player.score,
+    reward: state.players.find(candidate => candidate.uid === player.uid).reward
+  }));
+  state.phase = "minigame_results";
+  state.lastEvent = "🏆 ミニゲーム結果が決まりました！";
+  state.updatedAt = now;
+  return state;
+}
+
+function continueAfterMiniGame(current, uid, hostUid, now = Date.now()) {
+  const state = clone(current);
+  if (!state || state.phase !== "minigame_results" || uid !== hostUid) return current;
+  state.phase = "board";
+  const advanceRound = state.advanceRoundAfterMiniGame !== false;
+  state.immediateBattle = false;
+  state.battlePot = 0;
+  state.results = null;
+  state.miniGame = null;
+  state.currentSeat = advanceRound ? 0 : (state.resumeSeat || 0);
+  if (state.currentSeat >= state.players.length) {
+    state.currentSeat = 0;
+    state.round += 1;
+  } else if (advanceRound) state.round += 1;
+  state.resumeSeat = null;
+  state.advanceRoundAfterMiniGame = null;
+  state.roundId = randomId();
+  state.players.forEach(player => { player.score = 0; player.reward = 0; });
+  state.lastEvent = `第${state.round}ラウンド開始！`;
+  const first = state.players[state.currentSeat];
+  if (first.skipTurns > 0) {
+    first.skipTurns -= 1;
+    first.coins += state.lastSpurt ? 6 : 3;
+    moveToNextPlayer(state, now);
+  }
+  state.updatedAt = now;
+  return state;
+}
+
+function scoreTiming(value) {
+  return Math.round(Math.max(0, 100 - Math.abs(50 - value) * 2));
+}
+
+function scoreStopwatch(elapsed) {
+  return Math.round(Math.max(0, 10000 - Math.abs(5000 - elapsed)));
+}
+
+function scoreNumbers(elapsed) {
+  return Math.round(Math.max(1, 15000 - elapsed));
+}
+
+
+
+
+const $ = id => document.getElementById(id);
+const screens = ["setup-screen", "config-screen", "lobby-screen", "board-screen", "minigame-screen", "results-screen", "final-screen"];
+const session = {
+  user: null, roomCode: null, roomMeta: null, members: {}, presence: {}, state: null, inputs: {},
+  unsubs: [], serverOffset: 0, processing: new Set(), renderKey: "", uiTimer: null, raf: null,
+  numberProgress: null, tapBuffer: 0, tapFlushTimer: null, lastEvent: "",
+  catcher: null, animalAnswer: 0, animalKey: ""
+};
+
+let db;
+let auth;
+
+const MAP_3D = [
+  [-12,0,8],[-9,.1,8],[-6,.2,8],[-3,.3,8],[0,.4,8],[3,.5,8],[6,.6,8],[9,.7,8],
+  [9,.8,5],[6,.9,5],[3,1,5],[0,1.1,5],[-3,1.2,5],[-6,1.3,5],[-9,1.4,5],[-9,1.5,2],
+  [-6,1.6,2],[-3,1.7,2],[0,1.8,2],[3,1.9,2],[6,2,2],[9,2.1,2],[9,2.2,-1],[6,2.3,-1],
+  [3,2.4,-1],[0,2.5,-1],[-3,2.6,-1],[-6,2.7,-1],[-9,2.8,-1],[-9,2.9,-4],[-6,3,-4],[-3,3.1,-4],
+  [0,3.2,-4],[3,3.3,-4],[3,3.4,-7],[0,3.5,-7]
+];
+const threeBoard = { scene: null, camera: null, renderer: null, players: [], raf: null, yaw: -.3, pitch: -.58 };
+
+function updateThreeCamera() {
+  if (!threeBoard.camera) return;
+  const radius = 27;
+  threeBoard.camera.position.x = radius * Math.sin(threeBoard.yaw) * Math.cos(threeBoard.pitch);
+  threeBoard.camera.position.y = Math.max(8, radius * -Math.sin(threeBoard.pitch));
+  threeBoard.camera.position.z = radius * Math.cos(threeBoard.yaw) * Math.cos(threeBoard.pitch);
+  threeBoard.camera.lookAt(0, 1.5, 1.5);
+}
+
+function ensureThreeBoard() {
+  const container = $("canvas-container");
+  if (threeBoard.renderer) return true;
+  if (!container || !window.THREE) return false;
+  try {
+    const width = container.clientWidth || 360;
+    const height = container.clientHeight || 250;
+    threeBoard.scene = new THREE.Scene();
+    threeBoard.scene.background = new THREE.Color(0x020617);
+    threeBoard.camera = new THREE.PerspectiveCamera(48, width / height, .1, 1000);
+    threeBoard.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    threeBoard.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    threeBoard.renderer.setSize(width, height);
+    threeBoard.renderer.shadowMap.enabled = true;
+    container.innerHTML = "";
+    container.appendChild(threeBoard.renderer.domElement);
+    threeBoard.scene.add(new THREE.AmbientLight(0xffffff, .7));
+    const light = new THREE.DirectionalLight(0xffffff, 1.05);
+    light.position.set(-8, 18, 12); light.castShadow = true; threeBoard.scene.add(light);
+    MAP_3D.forEach((position, index) => {
+      const tile = MAP[index];
+      const geometry = new THREE.BoxGeometry(2, .4, 2);
+      const material = new THREE.MeshPhongMaterial({ color: tileColor(tile.type), shininess: 85, flatShading: true });
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.position.set(...position); mesh.castShadow = true; mesh.receiveShadow = true;
+      threeBoard.scene.add(mesh);
+      const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: .6 }));
+      edges.position.copy(mesh.position); threeBoard.scene.add(edges);
+    });
+    const goal = new THREE.Mesh(new THREE.ConeGeometry(.85, 2.2, 6), new THREE.MeshPhongMaterial({ color: 0xfacc15, emissive: 0x713f12 }));
+    goal.position.set(0, 5.2, -7); threeBoard.scene.add(goal);
+    updateThreeCamera();
+    let dragging = false, previousX = 0, previousY = 0;
+    container.addEventListener("pointerdown", event => { dragging = true; previousX = event.clientX; previousY = event.clientY; container.setPointerCapture?.(event.pointerId); });
+    container.addEventListener("pointermove", event => {
+      if (!dragging) return;
+      threeBoard.yaw -= (event.clientX - previousX) * .007;
+      threeBoard.pitch = Math.max(-1.05, Math.min(-.2, threeBoard.pitch - (event.clientY - previousY) * .005));
+      previousX = event.clientX; previousY = event.clientY; updateThreeCamera();
+    });
+    const stop = () => { dragging = false; };
+    container.addEventListener("pointerup", stop); container.addEventListener("pointercancel", stop);
+    const animate = () => {
+      if (threeBoard.renderer && threeBoard.scene && threeBoard.camera) threeBoard.renderer.render(threeBoard.scene, threeBoard.camera);
+      threeBoard.raf = requestAnimationFrame(animate);
+    };
+    animate();
+    return true;
+  } catch (error) {
+    console.warn("3D board unavailable; using 2D fallback", error);
+    threeBoard.renderer = null;
+    return false;
+  }
+}
+
+function syncThreePlayers() {
+  if (!threeBoard.scene) return;
+  threeBoard.players.forEach(mesh => threeBoard.scene.remove(mesh));
+  threeBoard.players = [];
+  const offsets = [[-.42,-.42],[.42,-.42],[-.42,.42],[.42,.42]];
+  session.state.players.forEach((player, index) => {
+    const point = MAP_3D[player.position] || MAP_3D[0];
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(.52, 24, 24), new THREE.MeshPhongMaterial({ color: player.color, shininess: 100, specular: 0xffffff }));
+    mesh.position.set(point[0] + offsets[index][0], point[1] + .75, point[2] + offsets[index][1]);
+    mesh.castShadow = true;
+    threeBoard.scene.add(mesh);
+    threeBoard.players.push(mesh);
+  });
+}
+
+function renderThreeBoard() {
+  const available = ensureThreeBoard();
+  $("canvas-container")?.classList.toggle("hidden", !available);
+  $("board")?.classList.toggle("hidden", available);
+  if (available) syncThreePlayers();
+  return available;
+}
+
+function configured() {
+  return firebaseConfig.apiKey && !Object.values(firebaseConfig).some(value => String(value).includes("YOUR_"));
+}
+
+function showScreen(id) {
+  screens.forEach(screen => $(screen)?.classList.toggle("hidden", screen !== id));
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>'"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char]));
+}
+
+function toast(message) {
+  const el = $("toast");
+  el.textContent = message;
+  el.classList.remove("hidden");
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => el.classList.add("hidden"), 2400);
+}
+
+function showError(error, fallback = "エラーが発生しました。") {
+  console.error(error);
+  const el = $("fatal-error");
+  el.textContent = error?.message || fallback;
+  el.classList.remove("hidden");
+  setTimeout(() => el.classList.add("hidden"), 6000);
+}
+
+function now() { return Date.now() + session.serverOffset; }
+function isHost() { return session.user?.uid === session.roomMeta?.hostUid; }
+function membersArray() { return Object.values(session.members || {}).sort((a, b) => a.joinedAt - b.joinedAt); }
+function currentPlayer() { return session.state?.players?.[session.state.currentSeat]; }
+function me() { return session.state?.players?.find(player => player.uid === session.user?.uid); }
+function activeMiniPlayer() { return session.state?.players?.[session.state?.miniGame?.turnSeat]; }
+function isMyMiniTurn() { return activeMiniPlayer()?.uid === session.user?.uid; }
+function makeActionId() { return `${session.user.uid.slice(0, 6)}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`; }
+
+function roomPath(suffix = "") { return `rooms/${session.roomCode}${suffix ? `/${suffix}` : ""}`; }
+
+async function authenticate() {
+  return new Promise((resolve, reject) => {
+    const stop = onAuthStateChanged(auth, async user => {
+      if (user) { stop(); session.user = user; resolve(user); }
+      else {
+        try { await signInAnonymously(auth); }
+        catch (error) { stop(); reject(error); }
+      }
+    });
+  });
+}
+
+function normalizeName() {
+  const value = $("nickname").value.trim().slice(0, 16);
+  if (!value) { $("nickname").focus(); toast("名前を入力してください"); return null; }
+  localStorage.setItem("party-road-name", value);
+  return value;
+}
+
+async function uniqueRoomCode() {
+  for (let attempt = 0; attempt < 12; attempt++) {
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    if (!(await get(ref(db, `rooms/${code}/meta`))).exists()) return code;
+  }
+  throw new Error("部屋コードを作れませんでした。もう一度お試しください。");
+}
+
+async function createRoom() {
+  const name = normalizeName();
+  if (!name) return;
+  $("create-room-btn").disabled = true;
+  try {
+    const code = await uniqueRoomCode();
+    const createdAt = now();
+    await set(ref(db, `rooms/${code}/meta`), { hostUid: session.user.uid, status: "lobby", createdAt });
+    await set(ref(db, `rooms/${code}/members/${session.user.uid}`), { uid: session.user.uid, name, joinedAt: createdAt });
+    await enterRoom(code);
+  } catch (error) { showError(error, "部屋を作成できませんでした。"); }
+  finally { $("create-room-btn").disabled = false; }
+}
+
+async function joinRoom() {
+  const name = normalizeName();
+  const code = $("room-code-input").value.replace(/\D/g, "").slice(0, 6);
+  if (!name || code.length !== 6) { toast("6桁の部屋コードを入力してください"); return; }
+  $("join-room-btn").disabled = true;
+  try {
+    const snapshot = await get(ref(db, `rooms/${code}`));
+    if (!snapshot.exists()) throw new Error("その部屋は見つかりませんでした。");
+    const room = snapshot.val();
+    if (room.meta?.status !== "lobby") throw new Error("その部屋はすでにゲーム中です。");
+    const existing = room.members?.[session.user.uid];
+    const count = Object.keys(room.members || {}).length;
+    if (!existing && count >= 4) throw new Error("その部屋は満員です。");
+    await set(ref(db, `rooms/${code}/members/${session.user.uid}`), {
+      uid: session.user.uid, name, joinedAt: existing?.joinedAt || now()
+    });
+    await enterRoom(code);
+  } catch (error) { showError(error, "部屋に参加できませんでした。"); }
+  finally { $("join-room-btn").disabled = false; }
+}
+
+async function restoreRoom() {
+  const code = sessionStorage.getItem("party-road-room");
+  if (!code) return false;
+  try {
+    const member = await get(ref(db, `rooms/${code}/members/${session.user.uid}`));
+    if (!member.exists()) return false;
+    await enterRoom(code);
+    return true;
+  } catch { return false; }
+}
+
+async function enterRoom(code) {
+  leaveListeners();
+  session.roomCode = code;
+  sessionStorage.setItem("party-road-room", code);
+  $("connection-pill").classList.remove("hidden");
+  $("connection-pill").classList.add("flex");
+  $("room-code-label").textContent = code;
+
+  const presenceRef = ref(db, `rooms/${code}/presence/${session.user.uid}`);
+  const connectedRef = ref(db, ".info/connected");
+  session.unsubs.push(onValue(connectedRef, async snap => {
+    const online = snap.val() === true;
+    $("connection-dot").className = `h-2 w-2 rounded-full ${online ? "bg-emerald-400" : "bg-rose-400"}`;
+    $("connection-label").textContent = online ? "オンライン" : "再接続中";
+    if (online) {
+      await onDisconnect(presenceRef).set({ online: false, updatedAt: serverTimestamp() });
+      await set(presenceRef, { online: true, updatedAt: serverTimestamp() });
+    }
+  }));
+  session.unsubs.push(onValue(ref(db, ".info/serverTimeOffset"), snap => { session.serverOffset = Number(snap.val() || 0); }));
+  session.unsubs.push(onValue(ref(db, roomPath("meta")), snap => {
+    session.roomMeta = snap.val();
+    if (!session.roomMeta) return showScreen("setup-screen");
+    renderLobby();
+  }));
+  session.unsubs.push(onValue(ref(db, roomPath("members")), snap => { session.members = snap.val() || {}; renderLobby(); }));
+  session.unsubs.push(onValue(ref(db, roomPath("presence")), snap => { session.presence = snap.val() || {}; renderLobby(); renderScoreboard(); }));
+  session.unsubs.push(onValue(ref(db, roomPath("inputs")), snap => {
+    session.inputs = snap.val() || {};
+    updateMiniGameLiveScores();
+    if (isHost()) processActions();
+  }));
+  session.unsubs.push(onValue(ref(db, roomPath("state")), snap => {
+    session.state = snap.val();
+    renderState();
+    if (isHost()) processActions();
+  }));
+  showScreen("lobby-screen");
+}
+
+function leaveListeners() {
+  session.unsubs.forEach(stop => { try { stop(); } catch {} });
+  session.unsubs = [];
+  clearInterval(session.uiTimer); cancelAnimationFrame(session.raf);
+}
+
+function renderLobby() {
+  if (!session.roomCode || session.roomMeta?.status !== "lobby") return;
+  showScreen("lobby-screen");
+  const members = membersArray();
+  $("member-count").textContent = `${members.length} / 4`;
+  $("members-list").innerHTML = members.map((member, index) => {
+    const online = session.presence?.[member.uid]?.online === true;
+    const host = member.uid === session.roomMeta?.hostUid;
+    return `<div class="flex items-center justify-between rounded-xl border border-slate-700 bg-slate-950 p-3">
+      <div class="flex items-center gap-3"><span class="h-3 w-3 rounded-full" style="background:${["#ef4444", "#3b82f6", "#10b981", "#f59e0b"][index]}"></span><span class="font-bold">${escapeHtml(member.name)}</span>${host ? '<span class="rounded bg-amber-400/20 px-1.5 py-0.5 text-[9px] font-black text-amber-300">HOST</span>' : ""}</div>
+      <span class="text-[10px] font-bold ${online ? "text-emerald-400" : "text-slate-600"}">${online ? "● 接続中" : "○ オフライン"}</span></div>`;
+  }).join("");
+  $("host-settings").classList.toggle("hidden", !isHost());
+  $("guest-waiting").classList.toggle("hidden", isHost());
+  $("start-game-btn").disabled = members.length < 2;
+  $("start-game-btn").textContent = members.length < 2 ? "2人以上でゲーム開始" : `${members.length}人でゲーム開始`;
+}
+
+async function startGame() {
+  if (!isHost()) return;
+  const members = membersArray();
+  if (members.length < 2) return toast("2人以上必要です");
+  const initial = createInitialState(members, { exactGoal: $("rule-exact").checked, lastSpurt: $("rule-spurt").checked });
+  try {
+    await set(ref(db, roomPath("state")), initial);
+    await update(ref(db, roomPath("meta")), { status: "playing", startedAt: serverTimestamp() });
+  } catch (error) { showError(error, "ゲームを開始できませんでした。"); }
+}
+
+async function writeInput(data) {
+  if (!session.roomCode || !session.state) return;
+  await set(ref(db, roomPath(`inputs/${session.user.uid}`)), {
+    uid: session.user.uid, actionId: makeActionId(), roundId: session.state.roundId, sentAt: now(), ...data
+  });
+}
+
+async function writeMiniAction(action, data = {}) {
+  await writeInput({ type: "mg_action", action, ...data });
+}
+
+async function processActions() {
+  if (!isHost() || !session.state || !session.inputs) return;
+  for (const [uid, input] of Object.entries(session.inputs)) {
+    if (!input?.actionId || input.roundId !== session.state.roundId) continue;
+    if (session.state.processed?.[uid] === input.actionId || session.processing.has(input.actionId)) continue;
+    if (!["roll", "item", "mg_action"].includes(input.type)) continue;
+    session.processing.add(input.actionId);
+    try {
+      await runTransaction(ref(db, roomPath("state")), current => {
+        if (input.type === "roll") return applyRoll(current, uid, input.actionId, now());
+        if (input.type === "item") return useItem(current, uid, input.actionId, input.itemIndex, input.targetUid, now());
+        return applyMiniGameAction(current, uid, input, now());
+      });
+    } catch (error) { console.error(error); }
+    finally { session.processing.delete(input.actionId); }
+  }
+}
+
+function renderState() {
+  if (!session.state) return;
+  const key = `${session.state.phase}:${session.state.updatedAt || 0}:${session.state.roundId}`;
+  if (session.lastEvent !== session.state.lastEvent) {
+    session.lastEvent = session.state.lastEvent;
+    if (session.state.lastEvent) toast(session.state.lastEvent);
+  }
+  if (session.state.phase === "board") renderBoard();
+  else if (["minigame_intro", "minigame_play"].includes(session.state.phase)) renderMiniGame(key);
+  else if (session.state.phase === "minigame_results") renderResults();
+  else if (session.state.phase === "finished") renderFinal();
+  if (isHost() && session.state.phase === "minigame_play") scheduleSettlement();
+}
+
+function renderBoard() {
+  clearInterval(session.uiTimer); cancelAnimationFrame(session.raf);
+  showScreen("board-screen");
+  const active = currentPlayer();
+  if (!active) return;
+  $("turn-color").style.background = active.color;
+  $("turn-name").textContent = active.name;
+  $("turn-name").style.color = active.color;
+  $("round-label").textContent = `ROUND ${session.state.round}`;
+  const myTurn = active.uid === session.user.uid;
+  $("turn-badge").textContent = myTurn ? "あなたの番！" : "待機中";
+  $("event-log").textContent = session.state.lastEvent || "";
+  $("last-spurt").classList.toggle("hidden", !session.state.lastSpurt);
+  $("dice-btn").disabled = !myTurn;
+  $("item-btn").disabled = !myTurn || !(active.items?.length);
+  const roll = session.state.lastRoll;
+  $("dice-label").textContent = roll?.uid === active.uid ? `🎲 ${roll.rolls.join(" + ")}` : "🎲 サイコロ";
+  if (!renderThreeBoard()) drawBoard();
+  renderScoreboard();
+}
+
+function tileColor(type) {
+  return ({ start: "#64748b", blue: "#2563eb", red: "#dc2626", warp: "#7c3aed", item: "#d97706", swap: "#0f766e", star: "#eab308", bowser: "#7f1d1d", hotspring: "#0891b2", battle: "#ea580c", goal: "#16a34a" })[type] || "#475569";
+}
+
+function boardPoints() {
+  const points = [];
+  for (let i = 0; i < MAP.length; i++) {
+    const angle = i * 0.48 + Math.PI;
+    const radius = 270 - i * 5.7;
+    points.push({ x: 360 + radius * Math.cos(angle), y: 315 + radius * .76 * Math.sin(angle) });
+  }
+  return points;
+}
+
+function drawBoard() {
+  const canvas = $("board");
+  const ctx = canvas.getContext("2d");
+  const points = boardPoints();
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const gradient = ctx.createRadialGradient(360, 300, 20, 360, 300, 430);
+  gradient.addColorStop(0, "#172554"); gradient.addColorStop(1, "#020617");
+  ctx.fillStyle = gradient; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = "#334155"; ctx.lineWidth = 18; ctx.lineCap = "round"; ctx.lineJoin = "round";
+  ctx.beginPath(); points.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke();
+  points.forEach((point, index) => {
+    const tile = MAP[index];
+    ctx.beginPath(); ctx.arc(point.x, point.y, index === 35 ? 19 : 15, 0, Math.PI * 2);
+    ctx.fillStyle = tileColor(tile.type); ctx.fill(); ctx.strokeStyle = "rgba(255,255,255,.55)"; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = "white"; ctx.font = "bold 10px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(index, point.x, point.y);
+  });
+  (session.state.players || []).forEach((player, index) => {
+    const point = points[player.position];
+    const offsets = [[-11,-18],[11,-18],[-11,18],[11,18]][index];
+    const x = point.x + offsets[0], y = point.y + offsets[1];
+    ctx.beginPath(); ctx.arc(x, y, 11, 0, Math.PI * 2); ctx.fillStyle = player.color; ctx.fill();
+    ctx.strokeStyle = player.uid === session.user.uid ? "#fff" : "rgba(255,255,255,.65)"; ctx.lineWidth = player.uid === session.user.uid ? 4 : 2; ctx.stroke();
+  });
+}
+
+function renderScoreboard() {
+  if (!session.state?.players || !$("scoreboard")) return;
+  $("scoreboard").innerHTML = session.state.players.map(player => {
+    const online = session.presence?.[player.uid]?.online === true;
+    return `<div class="flex items-center justify-between text-xs"><div class="flex min-w-0 items-center gap-2"><span class="h-2.5 w-2.5 shrink-0 rounded-full" style="background:${player.color}"></span><span class="truncate font-bold ${online ? "text-slate-200" : "text-slate-500"}">${escapeHtml(player.name)}</span><span class="text-[9px] text-slate-600">${player.position}マス</span></div><div class="flex items-center gap-2"><span class="text-[10px]">${player.hasShield ? "🛡️" : ""}${player.items?.length ? `🎒${player.items.length}` : ""}</span><span class="font-black text-amber-300">${player.coins}C</span></div></div>`;
+  }).join("");
+}
+
+function openItems() {
+  const player = currentPlayer();
+  if (!player || player.uid !== session.user.uid) return;
+  const list = $("item-list");
+  list.innerHTML = player.items?.map((item, index) => {
+    if (item.id !== "magnet") return `<button data-item="${index}" class="item-use w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-left"><span class="block font-black">${escapeHtml(item.name)}</span><span class="text-xs text-slate-400">${escapeHtml(item.desc)}</span></button>`;
+    const targets = session.state.players.filter(p => p.uid !== player.uid).map(p => `<button data-item="${index}" data-target="${p.uid}" class="item-use w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-left"><span class="font-black">${escapeHtml(item.name)} → ${escapeHtml(p.name)}</span><span class="block text-xs text-slate-400">${escapeHtml(item.desc)}</span></button>`).join("");
+    return targets;
+  }).join("") || '<p class="py-6 text-center text-sm text-slate-500">アイテムはありません</p>';
+  list.querySelectorAll(".item-use").forEach(button => button.addEventListener("click", async () => {
+    $("item-modal").classList.add("hidden"); $("item-modal").classList.remove("flex");
+    await writeInput({ type: "item", itemIndex: Number(button.dataset.item), targetUid: button.dataset.target || null });
+  }));
+  $("item-modal").classList.remove("hidden"); $("item-modal").classList.add("flex");
+}
+
+async function startMiniGame() {
+  if (!isHost()) return;
+  await runTransaction(ref(db, roomPath("state")), state => startMiniGameRound(state, session.user.uid, session.roomMeta.hostUid, now()));
+}
+
+function renderMiniGame(key) {
+  showScreen("minigame-screen");
+  const game = session.state.miniGame;
+  if (!game) return;
+  $("minigame-title").textContent = game.title;
+  $("minigame-desc").textContent = game.desc;
+  const intro = session.state.phase === "minigame_intro";
+  $("start-minigame-btn").classList.toggle("hidden", !intro || !isHost());
+  $("minigame-waiting").classList.toggle("hidden", !intro || isHost());
+  if (intro) {
+    $("minigame-play-area").innerHTML = '<div class="flex min-h-[240px] flex-col items-center justify-center text-center"><div class="pulse-ring flex h-24 w-24 items-center justify-center rounded-full bg-fuchsia-500/20 text-5xl">🎮</div><p class="mt-5 text-sm font-bold text-slate-400">全員の準備ができたら開始！</p></div>';
+    return;
+  }
+  if (session.renderKey === key) return;
+  session.renderKey = key;
+  clearInterval(session.uiTimer); cancelAnimationFrame(session.raf);
+  session.numberProgress = null;
+  session.catcher = null;
+  session.tapBuffer = session.inputs?.[session.user.uid]?.roundId === session.state.roundId ? (session.inputs[session.user.uid].taps || 0) : 0;
+  if (game.id === "clicker") setupClicker();
+  else if (game.id === "timing") setupTiming();
+  else if (game.id === "catcher") setupCatcher();
+  else if (game.id === "shield") setupShield();
+  else if (game.id === "bombpass") setupBombPass();
+  else if (game.id === "stopwatch") setupStopwatch();
+  else if (game.id === "numbers") setupNumbers();
+  else if (game.id === "tug") setupTug();
+  else if (game.id === "pairs") setupPairs();
+  else if (game.id === "balloon") setupBalloon();
+  else if (game.id === "memory") setupMemory();
+  else if (game.id === "animal") setupAnimal();
+}
+
+function countdownHtml() { return '<p id="mg-countdown" class="mb-4 text-center text-sm font-black text-rose-300"></p>'; }
+function remaining() { return Math.max(0, session.state.miniGame.endsAt - now()); }
+function startCountdown(extra) {
+  const tick = () => {
+    const before = session.state.miniGame.startedAt - now();
+    const el = $("mg-countdown");
+    if (el) el.textContent = before > 0 ? `開始まで ${(before / 1000).toFixed(1)}秒` : `残り ${(remaining() / 1000).toFixed(1)}秒`;
+    extra?.();
+  };
+  tick(); session.uiTimer = setInterval(tick, 50);
+}
+
+function setupClicker() {
+  const player = me();
+  $("minigame-play-area").innerHTML = `${countdownHtml()}<button id="tap-button" disabled class="flex min-h-[205px] w-full flex-col items-center justify-center rounded-3xl text-white shadow-xl active:scale-[.98]" style="background:${player?.color || "#6366f1"}"><span class="text-sm font-bold opacity-80">${escapeHtml(player?.name || "観戦")}</span><span id="my-taps" class="mt-1 text-6xl font-black">${session.tapBuffer}</span><span class="mt-2 text-xs font-bold opacity-75">TAP! TAP! TAP!</span></button><div id="live-scores" class="mt-4 grid grid-cols-2 gap-2"></div>`;
+  const button = $("tap-button");
+  button.disabled = !player;
+  button.addEventListener("pointerdown", () => {
+    if (now() < session.state.miniGame.startedAt || remaining() <= 0) return;
+    session.tapBuffer += 1; $("my-taps").textContent = session.tapBuffer;
+    clearTimeout(session.tapFlushTimer);
+    session.tapFlushTimer = setTimeout(() => writeInput({ type: "minigame", taps: session.tapBuffer }), 80);
+  });
+  startCountdown(() => { button.disabled = !player || now() < session.state.miniGame.startedAt || remaining() <= 0; });
+  updateMiniGameLiveScores();
+}
+
+function updateMiniGameLiveScores() {
+  if (session.state?.phase !== "minigame_play") return;
+  if (session.state.miniGame?.id === "clicker" && $("live-scores")) {
+    $("live-scores").innerHTML = session.state.players.map(player => {
+      const input = session.inputs?.[player.uid];
+      const taps = input?.roundId === session.state.roundId ? input.taps || 0 : 0;
+      return `<div class="rounded-xl bg-slate-950 p-2 text-center"><span class="text-[10px] font-bold" style="color:${player.color}">${escapeHtml(player.name)}</span><strong class="ml-2 text-sm">${taps}</strong></div>`;
+    }).join("");
+  }
+  if (session.state.miniGame?.id === "tug" && $("tug-knot")) {
+    const split = Math.ceil(session.state.players.length / 2);
+    const totals = [0, 0];
+    session.state.players.forEach(player => {
+      const input = session.inputs?.[player.uid];
+      const taps = input?.roundId === session.state.roundId ? Number(input.taps) || 0 : 0;
+      totals[player.seat < split ? 0 : 1] += taps;
+    });
+    const total = Math.max(1, totals[0] + totals[1]);
+    const position = Math.max(8, Math.min(92, 50 + ((totals[1] - totals[0]) / total) * 42));
+    $("tug-knot").style.left = `${position}%`;
+    if ($("tug-score")) $("tug-score").textContent = `${totals[0]} － ${totals[1]}`;
+  }
+}
+
+function timingValue() {
+  const elapsed = Math.max(0, now() - session.state.miniGame.startedAt);
+  const phase = (elapsed % 1800) / 1800;
+  return phase <= .5 ? phase * 200 : (1 - phase) * 200;
+}
+
+function setupTiming() {
+  const submitted = session.inputs?.[session.user.uid]?.roundId === session.state.roundId;
+  $("minigame-play-area").innerHTML = `${countdownHtml()}<div class="relative mt-12 h-10 overflow-hidden rounded-xl border border-slate-600 bg-slate-950"><div class="absolute inset-y-0 left-1/2 w-3 -translate-x-1/2 bg-emerald-400/70"></div><div id="timing-marker" class="absolute inset-y-0 w-5 -translate-x-1/2 rounded bg-amber-400" style="left:0%"></div></div><button id="timing-stop" ${submitted ? "disabled" : ""} class="mt-12 w-full rounded-2xl bg-indigo-600 py-5 text-xl font-black">${submitted ? "送信済み" : "ここだ！"}</button>`;
+  const button = $("timing-stop");
+  button.addEventListener("click", async () => {
+    if (now() < session.state.miniGame.startedAt || remaining() <= 0) return;
+    const value = timingValue(); button.disabled = true; button.textContent = `${value.toFixed(1)}%`;
+    await writeInput({ type: "minigame", value, score: scoreTiming(value) });
+  });
+  const animate = () => { const marker = $("timing-marker"); if (marker && !button.disabled) marker.style.left = `${timingValue()}%`; session.raf = requestAnimationFrame(animate); };
+  animate(); startCountdown();
+}
+
+function seededUnit(value) {
+  let hash = 2166136261;
+  for (const char of String(value)) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
+  hash += 0x6D2B79F5;
+  let t = hash;
+  t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+
+function setupCatcher() {
+  const player = me();
+  session.catcher = { x: 135, score: 0, resolved: new Set(), lastSent: -999 };
+  $("minigame-play-area").innerHTML = `${countdownHtml()}
+    <div class="mb-2 flex items-center justify-between text-xs font-bold"><span>🟡 +1　⭐ +5　💣 -3</span><span id="catcher-score" class="text-amber-300">0点</span></div>
+    <canvas id="catcher-canvas" width="320" height="220" class="h-56 w-full rounded-2xl border-2 border-slate-700 bg-slate-950"></canvas>
+    <div class="mt-3 grid grid-cols-2 gap-3"><button id="catcher-left" class="rounded-xl py-4 text-2xl font-black active:scale-95" style="background:${player?.color || "#475569"}">←</button><button id="catcher-right" class="rounded-xl py-4 text-2xl font-black active:scale-95" style="background:${player?.color || "#475569"}">→</button></div>`;
+  const move = delta => { if (session.catcher) session.catcher.x = Math.max(0, Math.min(270, session.catcher.x + delta)); };
+  $("catcher-left").addEventListener("pointerdown", () => move(-28));
+  $("catcher-right").addEventListener("pointerdown", () => move(28));
+  const canvas = $("catcher-canvas");
+  const ctx = canvas.getContext("2d");
+  const game = session.state.miniGame;
+  const draw = () => {
+    if (!session.catcher || session.state?.miniGame?.id !== "catcher") return;
+    ctx.clearRect(0, 0, 320, 220);
+    ctx.fillStyle = "#020617"; ctx.fillRect(0, 0, 320, 220);
+    const elapsed = now() - game.startedAt;
+    if (elapsed >= 0 && remaining() > 0) {
+      const maxIndex = Math.floor(elapsed / 560);
+      for (let index = 0; index <= maxIndex; index++) {
+        const age = elapsed - index * 560;
+        const fallDuration = 2050 + seededUnit(`${game.seed}-speed-${index}`) * 900;
+        const x = 8 + seededUnit(`${game.seed}-x-${index}`) * 294;
+        const roll = seededUnit(`${game.seed}-type-${index}`);
+        const type = roll < .22 ? "bomb" : roll > .86 ? "star" : "coin";
+        const emoji = type === "bomb" ? "💣" : type === "star" ? "⭐" : "🟡";
+        const y = -20 + (age / fallDuration) * 245;
+        if (age >= 0 && y < 225 && !session.catcher.resolved.has(index)) {
+          ctx.font = "22px system-ui"; ctx.fillText(emoji, x, y);
+          if (y >= 183 && x + 12 >= session.catcher.x && x <= session.catcher.x + 50) {
+            session.catcher.resolved.add(index);
+            session.catcher.score = Math.max(0, session.catcher.score + (type === "bomb" ? -3 : type === "star" ? 5 : 1));
+            $("catcher-score").textContent = `${session.catcher.score}点`;
+            if (session.catcher.score !== session.catcher.lastSent) {
+              session.catcher.lastSent = session.catcher.score;
+              writeInput({ type: "minigame", score: session.catcher.score }).catch(console.error);
+            }
+          }
+        }
+        if (y >= 225) session.catcher.resolved.add(index);
+      }
+    }
+    ctx.fillStyle = player?.color || "#6366f1";
+    ctx.fillRect(session.catcher.x, 195, 50, 16);
+    ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.strokeRect(session.catcher.x, 195, 50, 16);
+    ctx.fillStyle = "white"; ctx.font = "bold 10px system-ui"; ctx.textAlign = "center"; ctx.fillText(player?.name || "観戦", session.catcher.x + 25, 207); ctx.textAlign = "start";
+    session.raf = requestAnimationFrame(draw);
+  };
+  draw(); startCountdown();
+}
+
+function setupShield() {
+  const player = me();
+  const submitted = session.inputs?.[session.user.uid]?.roundId === session.state.roundId && Number(session.inputs[session.user.uid].pressedAt);
+  $("minigame-play-area").innerHTML = `${countdownHtml()}<p class="mb-4 text-center text-xs font-bold text-slate-400">「！」が出る前に押すとお手付き！</p>
+    <div id="shield-signal" class="mx-auto flex h-28 w-28 items-center justify-center rounded-full border-4 border-slate-600 bg-slate-800 text-5xl font-black">⏳</div>
+    <button id="shield-button" ${submitted ? "disabled" : ""} class="mt-8 w-full rounded-2xl py-8 text-2xl font-black shadow-xl active:scale-95" style="background:${player?.color || "#475569"}">${submitted ? "回答済み" : "ここだ！"}</button>`;
+  const button = $("shield-button");
+  button.addEventListener("pointerdown", async () => {
+    if (now() < session.state.miniGame.startedAt || remaining() <= 0 || button.disabled) return;
+    const pressedAt = now();
+    button.disabled = true;
+    button.textContent = pressedAt < session.state.miniGame.signalAt ? "お手付き！" : "タップ！";
+    await writeInput({ type: "minigame", pressedAt });
+  });
+  startCountdown(() => {
+    const active = now() >= session.state.miniGame.signalAt;
+    const signal = $("shield-signal");
+    if (!signal) return;
+    signal.textContent = active ? "❗" : "⏳";
+    signal.className = `mx-auto flex h-28 w-28 items-center justify-center rounded-full border-4 text-5xl font-black ${active ? "animate-pulse border-yellow-300 bg-red-600" : "border-slate-600 bg-slate-800"}`;
+  });
+}
+
+function setupBombPass() {
+  const game = session.state.miniGame;
+  const holder = session.state.players[game.bombSeat];
+  const mine = holder?.uid === session.user.uid;
+  $("minigame-play-area").innerHTML = `${countdownHtml()}<div class="space-y-2">${session.state.players.map((player, seat) => `<div class="flex items-center justify-between rounded-xl border p-3 ${seat === game.bombSeat ? "animate-pulse border-yellow-300 bg-red-700" : "border-slate-700 bg-slate-950"}"><span class="font-bold" style="color:${player.color}">${escapeHtml(player.name)}</span><span class="text-xl">${seat === game.bombSeat ? "💣" : "セーフ"}</span></div>`).join("")}</div>
+    <button id="bomb-pass-button" ${mine ? "" : "disabled"} class="mt-5 w-full rounded-2xl py-7 text-xl font-black shadow-xl active:scale-95 ${mine ? "animate-pulse bg-red-600" : "bg-slate-700"}">${mine ? "💣 爆弾をパス！" : `${escapeHtml(holder?.name || "だれか")}が爆弾を持っています`}</button>`;
+  $("bomb-pass-button").addEventListener("pointerdown", async () => {
+    if (!mine || remaining() <= 0) return;
+    $("bomb-pass-button").disabled = true;
+    await writeMiniAction("bomb_tap");
+  });
+  startCountdown();
+}
+
+function setupStopwatch() {
+  const submitted = session.inputs?.[session.user.uid]?.roundId === session.state.roundId;
+  $("minigame-play-area").innerHTML = `${countdownHtml()}<div class="flex h-28 items-center justify-center rounded-2xl border border-slate-700 bg-slate-950"><span id="sw-display" class="font-mono text-5xl font-black text-amber-300">0.00</span></div><button id="sw-stop" ${submitted ? "disabled" : ""} class="mt-6 w-full rounded-2xl bg-teal-600 py-5 text-xl font-black">${submitted ? "送信済み" : "5.00秒でストップ"}</button>`;
+  const button = $("sw-stop");
+  button.addEventListener("click", async () => {
+    const elapsed = Math.max(0, now() - session.state.miniGame.startedAt);
+    if (elapsed <= 0 || remaining() <= 0) return;
+    button.disabled = true; button.textContent = `${(elapsed / 1000).toFixed(2)}秒`;
+    await writeInput({ type: "minigame", elapsed, score: scoreStopwatch(elapsed) });
+  });
+  startCountdown(() => {
+    const elapsed = Math.max(0, now() - session.state.miniGame.startedAt);
+    const display = $("sw-display");
+    if (display) display.textContent = elapsed < 3000 ? (elapsed / 1000).toFixed(2) : "?.??";
+  });
+}
+
+function seededOrder(seed) {
+  let hash = 2166136261;
+  for (const char of seed) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
+  const values = [1, 2, 3, 4];
+  for (let i = values.length - 1; i > 0; i--) { hash = Math.imul(hash ^ (hash >>> 13), 1274126177); const j = Math.abs(hash) % (i + 1); [values[i], values[j]] = [values[j], values[i]]; }
+  return values;
+}
+
+function setupNumbers() {
+  const active = activeMiniPlayer();
+  const mine = isMyMiniTurn();
+  if (!mine) {
+    $("minigame-play-area").innerHTML = `${countdownHtml()}<div class="flex min-h-[260px] flex-col items-center justify-center text-center"><div class="text-5xl">📱</div><p class="mt-4 text-xl font-black" style="color:${active?.color || "#94a3b8"}">${active ? `${escapeHtml(active.name)}の挑戦中！` : "集計中…"}</p><p class="mt-2 text-sm font-bold text-slate-400">あなたの番になると数字ボタンが表示されます</p><p class="mt-4 text-xs text-amber-300">${escapeHtml(session.state.miniGame.lastResult || "")}</p></div>`;
+    startCountdown();
+    return;
+  }
+  const order = seededOrder(`${session.user.uid}${session.state.roundId}${session.state.miniGame.turnSeat}`);
+  session.numberProgress = { next: 1, started: now() };
+  $("minigame-play-area").innerHTML = `${countdownHtml()}<p class="mb-1 text-center text-lg font-black" style="color:${active.color}">${escapeHtml(active.name)}の挑戦！</p><p id="number-status" class="mb-4 text-center text-sm font-bold text-indigo-300">1 → 2 → 3 → 4 の順番に押そう</p><div class="grid grid-cols-2 gap-3">${order.map(n => `<button data-number="${n}" class="number-button aspect-square rounded-2xl border-4 border-white text-4xl font-black active:scale-90" style="background:${active.color}">${n}</button>`).join("")}</div>`;
+  $("minigame-play-area").querySelectorAll(".number-button").forEach(button => button.addEventListener("click", async () => {
+    if (now() < session.state.miniGame.startedAt || remaining() <= 0 || !isMyMiniTurn()) return;
+    const number = Number(button.dataset.number);
+    if (number !== session.numberProgress.next) {
+      session.numberProgress.next = 1;
+      session.numberProgress.started = now();
+      $("number-status").textContent = "順番が違います。1からやり直し！";
+      $("minigame-play-area").querySelectorAll(".number-button").forEach(item => { item.disabled = false; item.classList.remove("bg-emerald-700"); });
+      return;
+    }
+    button.disabled = true;
+    button.classList.add("bg-emerald-700");
+    session.numberProgress.next += 1;
+    if (number === 4) {
+      const elapsed = now() - session.numberProgress.started;
+      $("number-status").textContent = `${(elapsed / 1000).toFixed(2)}秒！送信中…`;
+      await writeMiniAction("numbers_finish", { elapsed, score: scoreNumbers(elapsed) });
+    }
+  }));
+  startCountdown();
+}
+
+function setupTug() {
+  const player = me();
+  const split = Math.ceil(session.state.players.length / 2);
+  const team = (player?.seat || 0) < split ? 0 : 1;
+  const teamNames = [
+    session.state.players.filter(item => item.seat < split).map(item => item.name).join("・"),
+    session.state.players.filter(item => item.seat >= split).map(item => item.name).join("・")
+  ];
+  $("minigame-play-area").innerHTML = `${countdownHtml()}<div class="rounded-xl border border-slate-700 bg-slate-950 p-4"><div class="flex justify-between text-xs font-bold"><span class="text-rose-400">${escapeHtml(teamNames[0])}</span><span class="text-emerald-400">${escapeHtml(teamNames[1])}</span></div><div class="relative mt-3 h-9 overflow-hidden rounded-lg bg-slate-800"><div class="h-full bg-gradient-to-r from-red-500 via-yellow-400 to-emerald-500"></div><div id="tug-knot" class="absolute inset-y-0 w-2 -translate-x-1/2 bg-white shadow-xl" style="left:50%"></div></div><p id="tug-score" class="mt-2 text-center text-sm font-black">0 － 0</p></div><button id="tug-button" class="mt-4 flex min-h-[180px] w-full flex-col items-center justify-center rounded-2xl text-white shadow-xl active:scale-[.98]" style="background:${team === 0 ? "linear-gradient(135deg,#dc2626,#4338ca)" : "linear-gradient(135deg,#059669,#ca8a04)"}"><span class="text-xs font-bold opacity-80">${team === 0 ? "LEFT TEAM" : "RIGHT TEAM"}</span><span id="my-tug-taps" class="mt-2 text-5xl font-black">${session.tapBuffer}</span><span class="mt-2 text-xl font-black">連打！！ 🔥</span></button>`;
+  const button = $("tug-button");
+  button.addEventListener("pointerdown", () => {
+    if (now() < session.state.miniGame.startedAt || remaining() <= 0) return;
+    session.tapBuffer += 1;
+    $("my-tug-taps").textContent = session.tapBuffer;
+    clearTimeout(session.tapFlushTimer);
+    session.tapFlushTimer = setTimeout(() => writeInput({ type: "minigame", taps: session.tapBuffer }), 70);
+  });
+  startCountdown(() => { button.disabled = now() < session.state.miniGame.startedAt || remaining() <= 0; });
+  updateMiniGameLiveScores();
+}
+
+function setupPairs() {
+  const game = session.state.miniGame;
+  const active = activeMiniPlayer();
+  const mine = isMyMiniTurn();
+  const locked = Number(game.lastReveal?.until || 0) > now();
+  const visible = new Set([...(game.selected || []), ...(locked ? game.lastReveal?.cards || [] : [])]);
+  $("minigame-play-area").innerHTML = `${countdownHtml()}<p class="mb-1 text-center text-lg font-black" style="color:${active?.color || "#94a3b8"}">${active ? `${escapeHtml(active.name)}の挑戦中！` : "集計中…"}</p><p class="mb-4 text-center text-xs font-bold text-slate-400">${mine ? "あなたの番です。カードを2枚選んでください" : "あなたの番になるまで待ってください"}</p><div class="grid grid-cols-4 gap-2">${(game.cards || []).map((card, index) => {
+    const show = card.matched || visible.has(index);
+    return `<button data-pair-card="${index}" ${!mine || locked || card.matched ? "disabled" : ""} class="pair-card aspect-square rounded-xl border-2 text-2xl font-black ${show ? card.emoji === "💣" ? "border-red-500 bg-red-950" : "border-amber-400 bg-slate-900" : "border-indigo-600 bg-slate-800"}">${show ? card.emoji : "❓"}</button>`;
+  }).join("")}</div><div class="mt-4 grid grid-cols-2 gap-2">${session.state.players.map((player, seat) => `<div class="rounded-lg bg-slate-950 p-2 text-center text-xs font-bold"><span style="color:${player.color}">${escapeHtml(player.name)}</span><span class="ml-2 text-amber-300">${game.points?.[seat] || 0}ペア</span></div>`).join("")}</div><p class="mt-3 text-center text-xs font-bold text-fuchsia-300">${escapeHtml(game.lastResult || "爆弾ペアを引くと得点が半分！")}</p>`;
+  $("minigame-play-area").querySelectorAll(".pair-card").forEach(button => button.addEventListener("click", async () => {
+    button.disabled = true;
+    await writeMiniAction("pairs_flip", { cardIndex: Number(button.dataset.pairCard) });
+  }));
+  if (locked) setTimeout(() => { if (session.state?.roundId === game.seed?.split("-")[0] || session.state?.miniGame?.id === "pairs") { session.renderKey = ""; renderState(); } }, Math.max(50, game.lastReveal.until - now() + 30));
+  startCountdown();
+}
+
+function setupBalloon() {
+  const game = session.state.miniGame;
+  const active = activeMiniPlayer();
+  const mine = isMyMiniTurn();
+  const scale = Math.min(2.55, 1 + (Number(game.balloonCurrent || 0) / 30) * 1.8);
+  $("minigame-play-area").innerHTML = `${countdownHtml()}<p class="text-center text-xl font-black" style="color:${active?.color || "#94a3b8"}">${active ? `${escapeHtml(active.name)}の番！` : "集計中…"}</p><p class="mt-1 text-center text-xs text-slate-400">限界を超えて割った人が最下位！</p><div class="flex h-52 items-center justify-center overflow-hidden"><div class="balloon-shape h-16 w-16 origin-bottom rounded-[50%_50%_45%_45%] shadow-2xl transition-all" style="background:${active?.color || "#64748b"};transform:scale(${scale})"></div></div>${mine ? `<div class="grid grid-cols-3 gap-2"><button data-pump="1" class="pump-button rounded-xl bg-slate-700 py-4 font-black active:scale-95">1回</button><button data-pump="2" class="pump-button rounded-xl bg-slate-700 py-4 font-black active:scale-95">2回</button><button data-pump="3" class="pump-button rounded-xl bg-slate-700 py-4 font-black active:scale-95">3回</button></div>` : `<div class="rounded-xl border border-slate-700 bg-slate-950 p-4 text-center text-sm font-bold text-slate-400">${escapeHtml(active?.name || "プレイヤー")}が空気を入れる回数を選んでいます</div>`}<p class="mt-3 text-center text-xs font-bold text-amber-300">${escapeHtml(game.lastResult || "慎重に選ぼう…")}</p>`;
+  $("minigame-play-area").querySelectorAll(".pump-button").forEach(button => button.addEventListener("click", async () => {
+    $("minigame-play-area").querySelectorAll(".pump-button").forEach(item => item.disabled = true);
+    await writeMiniAction("balloon_pump", { amount: Number(button.dataset.pump) });
+  }));
+  startCountdown();
+}
+
+function setupAnimal() {
+  const game = session.state.miniGame;
+  const active = activeMiniPlayer();
+  const mine = isMyMiniTurn();
+  const answerPhase = now() >= game.answerAt;
+  const answerKey = `${session.state.roundId}:${game.turnSeat}`;
+  if (session.animalKey !== answerKey) { session.animalKey = answerKey; session.animalAnswer = 0; }
+  $("minigame-play-area").innerHTML = `${countdownHtml()}<p id="animal-status" class="mb-3 text-center text-sm font-black text-amber-300">3秒後にスタート…</p><div id="animal-view" class="relative flex h-36 items-center justify-center overflow-hidden rounded-xl border-2 border-slate-800 bg-slate-950"><span id="animal-moving" class="absolute text-5xl"></span></div><div id="animal-answer" class="hidden"><p class="text-center text-lg font-black"><span class="text-4xl">${game.targetEmoji}</span> は何匹だった？</p>${mine ? `<div class="mt-5 rounded-xl p-4 shadow-lg" style="background:${active?.color}"><div class="flex items-center justify-center gap-6"><button id="animal-minus" class="h-12 w-12 rounded-full bg-white/20 text-2xl font-black">−</button><span id="animal-value" class="w-20 text-center text-5xl font-black">${session.animalAnswer}</span><button id="animal-plus" class="h-12 w-12 rounded-full bg-white/20 text-2xl font-black">＋</button></div><button id="animal-decide" class="mt-4 w-full rounded-lg bg-slate-900/50 py-3 font-black">決定</button></div>` : `<div class="mt-5 rounded-xl border border-slate-700 bg-slate-950 p-5 text-center font-bold" style="color:${active?.color || "#94a3b8"}">${active ? `${escapeHtml(active.name)}が回答中です` : "集計中…"}</div>`}</div>`;
+  const updateAnswer = delta => { session.animalAnswer = Math.max(0, session.animalAnswer + delta); if ($("animal-value")) $("animal-value").textContent = session.animalAnswer; };
+  $("animal-minus")?.addEventListener("click", () => updateAnswer(-1));
+  $("animal-plus")?.addEventListener("click", () => updateAnswer(1));
+  $("animal-decide")?.addEventListener("click", async () => { $("animal-decide").disabled = true; await writeMiniAction("animal_answer", { answer: session.animalAnswer }); });
+  startCountdown(() => {
+    const current = now();
+    const status = $("animal-status");
+    const view = $("animal-view");
+    const answer = $("animal-answer");
+    if (current >= game.answerAt) {
+      view?.classList.add("hidden"); answer?.classList.remove("hidden");
+      if (status) { status.textContent = active ? `${active.name}の解答！` : "結果を集計中！"; status.style.color = active?.color || "#fbbf24"; }
+      return;
+    }
+    const sequenceStart = game.startedAt + 3000;
+    if (current < sequenceStart) { if (status) status.textContent = current < game.startedAt ? "まもなく開始！" : `よく見て！開始まで ${Math.max(0, Math.ceil((sequenceStart - current) / 1000))}`; return; }
+    const sequenceElapsed = current - sequenceStart;
+    const index = Math.floor(sequenceElapsed / 250);
+    const moving = $("animal-moving");
+    if (status) status.textContent = "よく見て数えろ！";
+    if (moving && index < game.sequence.length) {
+      moving.textContent = game.sequence[index];
+      const progress = (sequenceElapsed % 250) / 250;
+      moving.style.left = `${-15 + progress * 115}%`;
+      moving.style.top = `${15 + seededUnit(`${game.seed}-animal-y-${index}`) * 45}%`;
+    } else if (moving) moving.textContent = "";
+  });
+}
+
+function setupMemory() {
+  const game = session.state.miniGame;
+  const active = activeMiniPlayer();
+  const mine = isMyMiniTurn();
+  $("minigame-play-area").innerHTML = `${countdownHtml()}<p id="memory-status" class="mb-4 text-center text-sm font-bold text-amber-300"></p><div class="grid grid-cols-4 gap-2">${[0,1,2,3].map(i => `<button data-memory="${i}" class="memory-card aspect-square rounded-xl border-2 border-slate-600 bg-slate-800 text-2xl font-black"><span class="block text-[10px] text-slate-400">${["A","B","C","D"][i]}</span><span class="memory-symbol">?</span></button>`).join("")}</div><div id="memory-turn" class="mt-4 rounded-xl border border-slate-700 bg-slate-950 p-3 text-center text-sm font-bold"></div>`;
+  $("minigame-play-area").querySelectorAll(".memory-card").forEach(button => button.addEventListener("click", async () => {
+    if (now() < game.revealUntil || remaining() <= 0 || !isMyMiniTurn()) return;
+    const choice = Number(button.dataset.memory);
+    $("minigame-play-area").querySelectorAll(".memory-card").forEach(b => b.disabled = true);
+    $("memory-status").textContent = `${["A","B","C","D"][choice]}を選択しました`;
+    await writeMiniAction("memory_choice", { choice });
+  }));
+  startCountdown(() => {
+    const reveal = now() >= game.startedAt && now() < game.revealUntil;
+    const status = $("memory-status");
+    if (status) status.textContent = now() < game.startedAt ? "まもなく表示！" : reveal ? "王冠の場所を覚えて！" : "王冠があったカードを選んで！";
+    $("minigame-play-area")?.querySelectorAll(".memory-card").forEach(button => {
+      const symbol = button.querySelector(".memory-symbol");
+      if (symbol) symbol.textContent = reveal && Number(button.dataset.memory) === game.memoryTarget ? "👑" : reveal ? "❌" : "?";
+      button.disabled = !mine || reveal || now() < game.startedAt || remaining() <= 0;
+    });
+    const turn = $("memory-turn");
+    if (turn) turn.innerHTML = active ? (mine ? `<span style="color:${active.color}">あなたの選択です。A〜Dを押してください</span>` : `<span style="color:${active.color}">${escapeHtml(active.name)}が選択中です</span>`) : "回答を集計しています…";
+  });
+}
+
+function scheduleSettlement() {
+  if (!isHost() || !session.state?.miniGame?.endsAt) return;
+  const delay = Math.max(0, session.state.miniGame.endsAt - now() + 120);
+  clearTimeout(scheduleSettlement.timer);
+  scheduleSettlement.timer = setTimeout(async () => {
+    try {
+      const snap = await get(ref(db, roomPath("inputs")));
+      const inputs = snap.val() || {};
+      await runTransaction(ref(db, roomPath("state")), state => settleMiniGame(state, inputs, now()));
+    } catch (error) { showError(error, "結果を確定できませんでした。"); }
+  }, delay);
+}
+
+function renderResults() {
+  clearInterval(session.uiTimer); cancelAnimationFrame(session.raf); session.renderKey = "";
+  showScreen("results-screen");
+  $("results-list").innerHTML = (session.state.results || []).map(result => `<div class="flex items-center justify-between rounded-xl border ${result.rank === 1 ? "border-amber-400/50 bg-amber-400/10" : "border-slate-700 bg-slate-950"} p-3"><div class="flex items-center gap-3"><span class="flex h-7 w-7 items-center justify-center rounded-full ${result.rank === 1 ? "bg-amber-300 text-slate-950" : "bg-slate-800"} text-xs font-black">${result.rank}</span><span class="font-bold" style="color:${result.color}">${escapeHtml(result.name)}</span></div><div class="text-right"><p class="text-xs text-slate-400">Score ${result.score}</p><p class="font-black text-amber-300">+${result.reward}C</p></div></div>`).join("");
+  $("continue-btn").classList.toggle("hidden", !isHost());
+  $("results-waiting").classList.toggle("hidden", isHost());
+}
+
+async function continueGame() {
+  if (!isHost()) return;
+  await runTransaction(ref(db, roomPath("state")), state => continueAfterMiniGame(state, session.user.uid, session.roomMeta.hostUid, now()));
+}
+
+function renderFinal() {
+  clearInterval(session.uiTimer); cancelAnimationFrame(session.raf);
+  showScreen("final-screen");
+  const ranked = [...session.state.players].sort((a, b) => b.coins - a.coins);
+  $("winner-message").textContent = `${ranked[0].name} の勝利！`;
+  $("final-list").innerHTML = ranked.map((player, index) => `<div class="flex items-center justify-between rounded-xl border ${index === 0 ? "border-amber-400 bg-gradient-to-r from-amber-500 to-yellow-600 text-slate-950" : "border-slate-700 bg-slate-950"} p-4"><div><span class="mr-3 font-black">${index + 1}位</span><span class="font-black">${escapeHtml(player.name)}</span></div><span class="font-black">${player.coins}C</span></div>`).join("");
+}
+
+async function copyCode() {
+  try { await navigator.clipboard.writeText(session.roomCode); toast("部屋コードをコピーしました"); }
+  catch { toast(`部屋コード：${session.roomCode}`); }
+}
+
+function bindEvents() {
+  $("nickname").value = localStorage.getItem("party-road-name") || "";
+  $("room-code-input").addEventListener("input", event => { event.target.value = event.target.value.replace(/\D/g, "").slice(0, 6); });
+  $("create-room-btn").addEventListener("click", createRoom);
+  $("join-room-btn").addEventListener("click", joinRoom);
+  $("copy-code-btn").addEventListener("click", copyCode);
+  $("start-game-btn").addEventListener("click", startGame);
+  $("dice-btn").addEventListener("click", () => writeInput({ type: "roll" }).catch(showError));
+  $("item-btn").addEventListener("click", openItems);
+  $("close-item-btn").addEventListener("click", () => { $("item-modal").classList.add("hidden"); $("item-modal").classList.remove("flex"); });
+  $("start-minigame-btn").addEventListener("click", startMiniGame);
+  $("continue-btn").addEventListener("click", continueGame);
+  $("leave-btn").addEventListener("click", () => { sessionStorage.removeItem("party-road-room"); leaveListeners(); location.reload(); });
+}
+
+async function boot() {
+  bindEvents();
+  if (!configured()) { showScreen("config-screen"); return; }
+  try {
+    const app = initializeApp(firebaseConfig);
+    auth = getAuth(app); db = getDatabase(app);
+    await authenticate();
+    if (!(await restoreRoom())) showScreen("setup-screen");
+  } catch (error) { showError(error, "Firebaseに接続できませんでした。設定を確認してください。"); }
+}
+
+boot();
+
+  </script>
+</body>
+</html>
